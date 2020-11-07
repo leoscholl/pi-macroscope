@@ -4,70 +4,7 @@ import numpy as np
 import os
 import time
 from pynput import mouse, keyboard
-
-# Arguments
-res_x = 1280
-res_y = 720
-cursor_size = 10 # pixels
-min_roi_size = 100 # pixels
-recording_dir = '/home/pi/recordings'
-filename = 'video'
-recording_duration = 10 # seconds
-
-# Keyboard listener for escape
-run = True
-def on_press(key):
-    global run
-    if key == keyboard.Key.esc:
-        run = False
-
-# Mouse listener for coordinates and clicks
-mouse_x = 0
-mouse_y = 0
-roi = np.zeros(4)
-roi_changing = False
-roi_changed = False
-record_changed = False
-recording = False
-record_start_time = None
-def on_move(x, y):
-    global mouse_x, mouse_y
-    mouse_x = x
-    mouse_y = y
-
-def on_click(x, y, button, pressed):
-    global roi, roi_changing, roi_changed, record_mask, record_changed
-    if record_mask[y,x] and pressed:
-        record_changed = True
-    elif pressed:
-        roi[0] = x
-        roi[1] = y
-        roi_changing = True
-    else:
-        roi_changing = False
-        roi_changed = True
-
-exp = 0
-def on_scroll(x, y, dx, dy):
-    global camera, exp
-    exp += dy
-    if exp > 25:
-        exp = 25
-    if exp < -25:
-        exp = -25
-    camera.exposure_compensation = exp
-
-# ROI update
-def change_roi():
-    if roi[2] < 0 and roi[3] < 0:
-        roi[0] = roi[0] + roi[2]
-        roi[1] = roi[1] + roi[3]
-        roi[2] = -roi[2]
-        roi[3] = -roi[3]
-    if roi[2] < min_roi_size or roi[3] < min_roi_size:
-        camera.zoom = (0.0, 0.0, 1.0, 1.0)
-    else:
-        camera.zoom = (roi[0]/res_x, roi[1]/res_y, roi[2]/res_x, roi[3]/res_y)
+from threading import Timer
 
 def create_circular_mask(h, w, center=None, radius=None):
 
@@ -82,83 +19,159 @@ def create_circular_mask(h, w, center=None, radius=None):
     mask = dist_from_center <= radius
     return mask
 
-# Ask for filename
-value = input('Session name? (default is "%s") ' % filename)
-if value:
-    filename = value
-i = 0
+class Macroscope:
 
-camera = picamera.PiCamera()
-camera.resolution = (res_x, res_y)
-camera.framerate = 24
-camera.start_preview()
-
-# Start listeners
-l_mouse = mouse.Listener(
-    on_move=on_move,
-    on_click=on_click,
-    on_scroll=on_scroll)
-l_mouse.start()
-l_keyboard = keyboard.Listener(
-    on_press=on_press)
-l_keyboard.start()
-
-# Create overlays
-a = np.zeros((res_y, res_x, 4), dtype=np.uint8)
-o_mouse = camera.add_overlay(a.tobytes(), layer=4)
-o_roi = camera.add_overlay(a.tobytes(), layer=0)
-record_mask = create_circular_mask(res_y, res_x, (30, 30), 10)
-a[record_mask,0] = 0xff
-a[record_mask,3] = 0x40
-o_record = camera.add_overlay(a.tobytes(), layer=3)
-
-# Main loop
-while run:
-    
-    # Draw the mouse
-    a = np.zeros((res_y, res_x, 4), dtype=np.uint8)
-    a[mouse_y, int(mouse_x-cursor_size/2):int(mouse_x+cursor_size/2), :] = 0xff
-    a[int(mouse_y-cursor_size/2):int(mouse_y+cursor_size/2), mouse_x, :] = 0xff
-    o_mouse.update(a.tobytes())
-    
-    # Handle recording start/stop
-    if record_changed:
-        recording = not recording
-        a = np.zeros((res_y, res_x, 4), dtype=np.uint8)
-        a[record_mask,0] = 0xff
-        if recording:
-            a[record_mask,3] = 0xff
-            while os.path.exists(os.path.join(recording_dir, "%s%03d.h264" % (filename,i))):
-                i += 1
-            camera.start_recording(os.path.join(recording_dir, "%s%03d.h264" % (filename,i)))
-            record_start_time = time.time()
-        else:
-            a[record_mask,3] = 0x40
-            camera.stop_recording()
-        o_record.update(a.tobytes())
-        record_changed = False
-    
-    # Split the recording up
-    if recording and time.time() - record_start_time > recording_duration:
-        i += 1
-        camera.split_recording(os.path.join(recording_dir, "%s%03d.h264" % (filename,i)))
-        record_start_time = time.time()
+    def __init__(self, resolution, recording_path, recording_session, cursor_size=11, min_roi_size=100, recording_duration=600):
         
-    # Handle ROI selection
-    if roi_changing:
-        roi[2] = mouse_x - roi[0]
-        roi[3] = mouse_y - roi[1]
-        x_y = roi[2]*res_y/res_x
-        y_x = roi[3]*res_x/res_y
-        if roi[2] > y_x:
-            roi[2] = y_x
+        # Constants
+        self.resolution = resolution
+        self.recording_path = recording_path
+        self.recording_session = recording_session
+        self.cursor_size = cursor_size # in pixels
+        self.min_roi_size = min_roi_size # in pixels
+        self.recording_duration = recording_duration # in seconds
+
+        # Variables
+        self.recording = False
+        self.recording_number = 0
+        self.roi = np.zeros(4)
+        self.roi_changing = False
+        self.exp = 0
+
+    # Pynput mouse listeners
+    def on_mouse_move(self, x, y):
+        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0xff
+        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0xff
+        self.o_mouse.update(a.tobytes())
+        if self.roi_changing:
+            roi = self.roi
+            roi[2:3] = [x - roi[0], y - roi[1]]
+            x_y = roi[2]*self.resolution[1]/self.resolution[0]
+            y_x = roi[3]*self.resolution[0]/self.resolution[1]
+            if roi[2] > y_x:
+                roi[2] = y_x
+            else:
+                roi[3] = x_y
+            a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+            a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 0] = 0xff
+            a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 3] = 0x40
+            self.o_roi.update(a.tobytes())
+            self.o_roi.layer = 5
+            self.roi = roi
+
+    def on_mouse_click(self, x, y, button, pressed):
+        if self.record_mask[y,x] and pressed:
+            self.recording = not self.recording
+            a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+            a[self.record_mask,0] = 0xff
+            if self.recording:
+                a[self.record_mask,3] = 0xff
+                while os.path.exists(self.get_recording_filename()):
+                    self.recording_number += 1
+                self.camera.start_recording(self.get_recording_filename())
+                self.record_start_time = time.time()
+            else:
+                a[self.record_mask,3] = 0x40
+                self.camera.stop_recording()
+            self.o_record.update(a.tobytes())
+        elif pressed:
+            self.roi[0:1] = [x, y]
+            self.roi_changing = True
         else:
-            roi[3] = x_y
-        a = np.zeros((res_y, res_x, 4), dtype=np.uint8)
-        a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 0] = 0xff
-        a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 3] = 0x40
-        o_roi.update(a.tobytes())
-        o_roi.layer = 5
-    elif roi_changed:
-        o_roi.layer = 0
-        change_roi()
+            self.roi_changing = False
+            self.o_roi.layer = 0
+            self.change_roi()         
+
+    def on_mouse_scroll(self, x, y, dx, dy):
+        self.exp += dy
+        if self.exp > 25:
+            self.exp = 25
+        if self.exp < -25:
+            self.exp = -25
+        self.camera.exposure_compensation = self.exp
+
+    # ROI update
+    def change_roi(self):
+        roi = self.roi
+        if roi[2] < 0 and roi[3] < 0:
+            roi[0] = roi[0] + roi[2]
+            roi[1] = roi[1] + roi[3]
+            roi[2] = -roi[2]
+            roi[3] = -roi[3]
+        if roi[2] < self.min_roi_size or roi[3] < self.min_roi_size:
+            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
+        else:
+            self.camera.zoom = (roi[0]/self.resolution[0], roi[1]/self.resolution[1], 
+                roi[2]/self.resolution[0], roi[3]/self.resolution[1])
+            print("Changing sensor mode from %d" % self.camera.sensor_mode)
+            if roi[2] < 1012 and roi[3] < 760:
+                self.camera.sensor_mode = 4
+            else:
+                self.camera.sensor_mode = 2
+            print("... to %d" % self.camera.sensor_mode)
+
+    # Main loop
+    def run(self):
+
+        # Init camera
+        camera = picamera.PiCamera()
+        camera.resolution = tuple(self.resolution)
+        camera.framerate = 30
+        camera.start_preview()
+        self.camera = camera
+
+        # Add overlays
+        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+        self.o_mouse = camera.add_overlay(a.tobytes(), layer=4)
+        self.o_roi = camera.add_overlay(a.tobytes(), layer=0)
+        record_mask = create_circular_mask(self.resolution[1], self.resolution[0], (30, 30), 10)
+        a[record_mask,0] = 0xff
+        a[record_mask,3] = 0x40
+        self.o_record = camera.add_overlay(a.tobytes(), layer=3)
+        self.record_mask = record_mask
+
+        l_mouse = mouse.Listener(
+            on_move=lambda x,y: self.on_mouse_move(x,y),
+            on_click=lambda x,y,button,pressed: self.on_mouse_click(x,y,button,pressed),
+            on_scroll=lambda x,y,dx,dy: self.on_mouse_scroll(x,y,dx,dy))
+        l_mouse.start()
+
+        def check_escape(key):
+            if key == keyboard.Key.esc:
+                return False
+        l_keyboard = keyboard.Listener(on_press=check_escape)
+        l_keyboard.start()
+
+        while l_keyboard: # loop until escape key is pressed
+
+            # Split the recording up if necessary
+            if self.recording and time.time() - self.record_start_time > self.recording_duration:
+                self.recording_number += 1
+                self.camera.split_recording(self.get_recording_filename())
+                self.record_start_time = time.time()       
+
+    # Path helper
+    def get_recording_filename(self):
+        return os.path.join(self.recording_path, "%s%03d.h264" % (self.recording_session,self.recording_number))
+
+
+if __name__ == "__main__":
+    res_x = 1024
+    res_y = 768
+    recording_dir = '/home/pi/recordings'
+    filename = 'video'
+
+    # Ask for filename
+    timeout = 5
+    t = Timer(timeout, print, ['Using default...'])
+    t.start()
+    prompt = 'Session name? (default is "%s") ' % filename
+    value = input(prompt)
+    t.cancel()
+    if value:
+        filename = value
+
+    scope = Macroscope([res_x, res_y], recording_dir, filename)
+    scope.run()
+    
