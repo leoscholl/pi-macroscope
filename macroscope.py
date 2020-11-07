@@ -40,10 +40,8 @@ class Macroscope:
 
     # Pynput mouse listeners
     def on_mouse_move(self, x, y):
-        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
-        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0xff
-        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0xff
-        self.o_mouse.update(a.tobytes())
+        self.mouse_pos = (x, y)
+        self.update = True
         if self.roi_changing:
             roi = self.roi
             roi[2:3] = [x - roi[0], y - roi[1]]
@@ -53,11 +51,6 @@ class Macroscope:
                 roi[2] = y_x
             else:
                 roi[3] = x_y
-            a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
-            a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 0] = 0xff
-            a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 3] = 0x40
-            self.o_roi.update(a.tobytes())
-            self.o_roi.layer = 5
             self.roi = roi
 
     def on_mouse_click(self, x, y, button, pressed):
@@ -90,6 +83,23 @@ class Macroscope:
         if self.exp < -25:
             self.exp = -25
         self.camera.exposure_compensation = self.exp
+
+    def draw_overlays(self):
+
+        # Mouse
+        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+        x, y = self.mouse_pos
+        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0xff
+        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0xff
+        self.o_mouse.update(a.tobytes())
+
+        # ROI
+        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+        roi = self.roi
+        a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 0] = 0xff
+        a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 3] = 0x40
+        self.o_roi.update(a.tobytes())
+        self.o_roi.layer = 5
 
     # ROI update
     def change_roi(self):
@@ -144,6 +154,10 @@ class Macroscope:
         l_keyboard.start()
 
         while l_keyboard.running: # loop until escape key is pressed
+
+            if self.update:
+                self.draw_overlays()
+                self.update = False
 
             # Split the recording up if necessary
             if self.recording and time.time() - self.record_start_time > self.recording_duration:
