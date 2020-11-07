@@ -143,7 +143,7 @@ class Macroscope:
         l_keyboard = keyboard.Listener(on_press=check_escape)
         l_keyboard.start()
 
-        while l_keyboard: # loop until escape key is pressed
+        while l_keyboard.running: # loop until escape key is pressed
 
             # Split the recording up if necessary
             if self.recording and time.time() - self.record_start_time > self.recording_duration:
