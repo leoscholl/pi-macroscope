@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Macroscope
+Icon=/home/pi/pi-macroscope/icon.jpg
+Path=/home/pi
+Exec=lxterminal -t "Macroscope" -e python3 /home/pi/pi-macroscope/macroscope.py
+Type=Application
+Encoding=UTF-8
+Terminal=false
+Categories=Other;
