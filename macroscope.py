@@ -87,6 +87,8 @@ class Macroscope:
                 print('Stopped recording.')
             self.o_record.update(a.tobytes())
             self.recording = recording
+        elif self.record_mask[y,x]:
+            pass
         elif pressed:
             self.roi[0] = x
             self.roi[1] = y
@@ -111,8 +113,8 @@ class Macroscope:
         # Mouse
         a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
         x, y = self.mouse_pos
-        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0x7f
-        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0x7f
+        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0xff
+        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0xff
         self.o_mouse.update(a.tobytes())
 
         # ROI
@@ -163,7 +165,8 @@ class Macroscope:
         a[record_mask,3] = 0x40
         self.o_record = camera.add_overlay(a.tobytes(), layer=3)
         self.record_mask = record_mask
-
+        
+        # Listen to mouse and keyboard events
         l_mouse = mouse.Listener(
             on_move=lambda x,y: self.on_mouse_move(x,y),
             on_click=lambda x,y,button,pressed: self.on_mouse_click(x,y,button,pressed),
@@ -175,13 +178,14 @@ class Macroscope:
                 return False
         l_keyboard = keyboard.Listener(on_press=check_escape)
         l_keyboard.start()
-
-        while l_keyboard.running: # loop until escape key is pressed
+        
+        # Loop until escape key is pressed
+        while l_keyboard.running: 
 
             if self.update:
                 self.draw_overlays()
                 self.update = False
-                time.sleep(1/100) # try not to update the overlays super fast
+                time.sleep(1/30) # try not to update the overlays super fast
                 
             # Split the recording up if necessary
             if self.recording and time.time() - self.recording_start_time > self.recording_duration:
@@ -189,6 +193,14 @@ class Macroscope:
                 self.camera.split_recording(self.get_recording_filename())
                 self.recording_start_time = time.time()
                 print('... %s ' % self.get_recording_filename())
+        
+        # Cleanup
+        self.camera.remove_overlay(self.o_mouse)
+        self.camera.remove_overlay(self.o_roi)
+        self.camera.remove_overlay(self.o_record)
+        self.camera.stop_preview()
+        if self.recording:
+            self.camera.stop_recording()
 
 # Path helper
     def get_recording_filename(self):
