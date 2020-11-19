@@ -6,7 +6,7 @@ Simple GUI for pi camera that allows you to select an ROI for recording. Uses th
 ## Install
 Download or clone this repo onto a raspberry pi
 
-As of November 2020 you also need to manually update the picamera python module for compatability with the new HQ camera. See [leoscholl/picamera](https://github.cm/leoscholl/picamera)
+As of November 2020 you also need to manually update the picamera python module for compatability with the new HQ camera. See [leoscholl/picamera](https://github.com/leoscholl/picamera)
 
 ## Copy the shortcut
 In the file manager, under Edit/Preferences/General, check the box for "Don't ask options on launch executable file". \
