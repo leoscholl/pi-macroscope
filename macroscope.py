@@ -264,5 +264,10 @@ if __name__ == "__main__":
     print('Press "p" to start/stop preview')
     print('Press "Esc" to exit')
     
-    scope = Macroscope(recording_dir, filename)
-    scope.run()
+    try:
+        scope = Macroscope(recording_dir, filename)
+        scope.run()
+    except Exception as e:
+        print(e)
+        timeout_input("Press any key to exit", timeout=60)
+        
