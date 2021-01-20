@@ -259,7 +259,7 @@ if __name__ == "__main__":
     if ans == -1 or value == "":
         print('Using default...')
     else:
-        filename = valuep
+        filename = value
     
     print('--------------------------------------------------')
     print('Press "P" to start/stop preview')
