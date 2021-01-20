@@ -87,10 +87,8 @@ class Macroscope:
             self.roi[2] = 0
             self.roi[3] = 0
             self.roi_changing = True
-            self.o_roi.layer = 5
         else:
             self.roi_changing = False
-            self.o_roi.layer = 0
             self.change_roi()
             self.roi = np.zeros(4)
 
@@ -108,15 +106,12 @@ class Macroscope:
         elif hasattr(key, 'char') and key.char == "p": # preview
             if self.preview:
                 self.camera.stop_preview()
-                self.o_roi.layer = 0
-                self.o_record.layer = 0
-                self.o_mouse.layer = 0
+                self.camera.remove_overlay(self.overlay)
                 self.preview = False
             else:
+                a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
+                self.overlay = self.camera.add_overlay(a.tobytes(), layer=3)
                 self.camera.start_preview()
-                self.o_roi.layer = 0
-                self.o_record.layer = 3
-                self.o_mouse.layer = 4
                 self.preview = True
         elif key == keyboard.Key.space: # recording
             self.toggle_recording()
@@ -125,18 +120,18 @@ class Macroscope:
         elif hasattr(key, 'char') and key.char == "r": # rotate
             self.camera.rotation = self.camera.rotation + 90
 
-    def draw_overlays(self):
-
-        # Mouse
+    def draw_overlay(self):
         a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
-        x, y = self.mouse_pos
-        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0xff
-        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0xff
-        self.o_mouse.update(a.tobytes())
+        
+        # Recording
+        a[self.record_mask,0] = 0xff
+        if self.recording:
+            a[self.record_mask,3] = 0xff
+        else:
+            a[self.record_mask,3] = 0x40
 
         # ROI
         if self.roi_changing:
-            a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
             roi = copy.deepcopy(self.roi)
             if roi[2] < 0:
                 roi[0] = roi[0] + roi[2]
@@ -146,16 +141,12 @@ class Macroscope:
                 roi[3] = -roi[3]
             a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), :] = 0xff
             a[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2]), 3] = 0x10
-            self.o_roi.update(a.tobytes())
         
-        # Recording
-        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
-        a[self.record_mask,0] = 0xff
-        if self.recording:
-            a[self.record_mask,3] = 0xff
-        else:
-            a[self.record_mask,3] = 0x40
-        self.o_record.update(a.tobytes())
+        # Mouse
+        x, y = self.mouse_pos
+        a[y, int(x-self.cursor_size/2):int(x+self.cursor_size/2), :] = 0xff
+        a[int(y-self.cursor_size/2):int(y+self.cursor_size/2), x, :] = 0xff
+        self.overlay.update(a.tobytes())
 
 
     # ROI update
@@ -204,16 +195,7 @@ class Macroscope:
         camera.framerate = 30
         self.camera = camera
         self.resolution = camera.resolution
-
-        # Add overlays
-        a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
-        self.o_mouse = camera.add_overlay(a.tobytes(), layer=0)
-        self.o_roi = camera.add_overlay(a.tobytes(), layer=0)
-        record_mask = create_circular_mask(self.resolution[1], self.resolution[0], (25, 25), 11)
-        a[record_mask,0] = 0xff
-        a[record_mask,3] = 0x40
-        self.o_record = camera.add_overlay(a.tobytes(), layer=3)
-        self.record_mask = record_mask
+        self.record_mask = create_circular_mask(self.resolution[1], self.resolution[0], (25, 25), 11)
         
         # Listen to mouse and keyboard events
         l_mouse = mouse.Listener(
@@ -239,9 +221,9 @@ class Macroscope:
         while l_keyboard.running: 
 
             if self.update:
-                self.draw_overlays()
+                self.draw_overlay()
                 self.update = False
-                time.sleep(1/100) # try not to update the overlays super fast
+                time.sleep(1/60) # try not to update the overlays super fast
                 
             # Split the recording up if necessary
             if self.recording and time.time() - self.recording_start_time > self.recording_duration:
@@ -252,9 +234,8 @@ class Macroscope:
             
         
         # Cleanup
-        self.camera.remove_overlay(self.o_mouse)
-        self.camera.remove_overlay(self.o_roi)
-        self.camera.remove_overlay(self.o_record)
+        if self.preview:
+            self.camera.remove_overlay(self.overlay)
         if self.recording:
             self.camera.stop_recording(splitter_port=2)
         l_mouse.stop()
@@ -270,22 +251,27 @@ class Macroscope:
 
 if __name__ == "__main__":
     recording_dir = '/home/pi/recordings'
-    filename = 'video'
+    filename = 'macroscope'
 
     # Ask for filename
     prompt = 'Session name? (default is "%s") ' % filename
-    ans, value = timeout_input(prompt, timeout=10, default=filename)
+    ans, value = timeout_input(prompt, timeout=30, default=filename)
     if ans == -1 or value == "":
         print('Using default...')
     else:
-        filename = value
+        filename = valuep
     
-    print('Press "p" to start/stop preview')
+    print('--------------------------------------------------')
+    print('Press "P" to start/stop preview')
     print('Press Space to start/stop recording')
     print('Press Enter to take a still image')
-    print('Press "r" to rotate camera')
+    print('Press "R" to rotate camera')
+    print('Use scroll wheel to adjust brightness')
+    print('Click and drag to set ROI. Click anywhere to reset')
     print('Press "Esc" to exit')
-    time.sleep(2)
+    print('--------------------------------------------------')
+    print('')
+    time.sleep(1)
     
     try:
         scope = Macroscope(recording_dir, filename)

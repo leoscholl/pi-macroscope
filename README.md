@@ -18,5 +18,8 @@ You will need a mouse and keyboard if you want to make recordings and set the RO
 * Double click the shortcut. Enter a session name for the recordings.
 * Click and drag the mouse to set the ROI. Click anywhere to reset to the full frame.
 * Scroll up or down to increase or decrease exposure compensation. One scroll is 1/6 of a stop.
-* Click the red circle at the top left to begin recording. The resolution of the recordings is currently defined by the resolution of the screen. What you see is what you get, minus the GUI overlays.
+* Press <kbd>P</kbd> to show/hide the preview.
+* Press <kbd>R</kbd> to rotate the image by 90 degrees.
+* Click the red circle at the top left or press <kbd>Space</kbd> to begin recording. The resolution of the recordings is currently defined by the resolution of the screen. What you see is what you get, minus the GUI overlays.
+* Press <kbd>Enter</kbd> to take a still image.
 * Press <kbd>Esc</kbd> to exit. This will stop recording if it is on. 
