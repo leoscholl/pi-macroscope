@@ -42,6 +42,7 @@ class Macroscope:
         self.preview = False
         self.recording = False
         self.recording_number = 0
+        self.image_number = 0
         self.roi = np.zeros(4)
         self.roi_changing = False
         self.mouse_pos = (0, 0)
@@ -77,18 +78,7 @@ class Macroscope:
         if not self.preview:
             return
         if self.record_mask[y,x] and pressed:
-            recording = not self.recording
-            if recording:
-                while os.path.exists(self.get_recording_filename()):
-                    self.recording_number += 1
-                self.camera.start_recording(self.get_recording_filename(), splitter_port=2)
-                print('Started recording %s ' % self.get_recording_filename())
-                self.recording_start_time = time.time()
-            else:
-                self.camera.stop_recording(splitter_port=2)
-                print('Stopped recording.')
-            self.recording = recording
-            self.update = True
+            self.toggle_recording()
         elif self.record_mask[y,x]:
             pass
         elif pressed:
@@ -115,7 +105,7 @@ class Macroscope:
     def on_keypress(self, key):
         if key == keyboard.Key.esc:
             return False
-        elif hasattr(key, 'char') and key.char == "p":
+        elif hasattr(key, 'char') and key.char == "p": # preview
             if self.preview:
                 self.camera.stop_preview()
                 self.o_roi.layer = 0
@@ -128,6 +118,12 @@ class Macroscope:
                 self.o_record.layer = 3
                 self.o_mouse.layer = 4
                 self.preview = True
+        elif key == keyboard.Key.space: # recording
+            self.toggle_recording()
+        elif key == keyboard.Key.enter:
+            self.take_still()
+        elif hasattr(key, 'char') and key.char == "r": # rotate
+            self.camera.rotation = self.camera.rotation + 90
 
     def draw_overlays(self):
 
@@ -177,6 +173,28 @@ class Macroscope:
         else:
             self.camera.zoom = (roi[0]/self.resolution[0], roi[1]/self.resolution[1], 
                 roi[2]/self.resolution[0], roi[3]/self.resolution[1])
+            
+    def toggle_recording(self):
+        recording = not self.recording
+        if recording:
+            while os.path.exists(self.get_recording_filename()):
+                self.recording_number += 1
+            self.camera.start_recording(self.get_recording_filename(), splitter_port=2)
+            print('Started recording %s ' % self.get_recording_filename())
+            self.recording_start_time = time.time()
+        else:
+            self.camera.stop_recording(splitter_port=2)
+            print('Stopped recording.')
+        self.recording = recording
+        self.update = True
+        
+    def take_still(self):
+        filename = os.path.join(self.recording_path, "%s-still%03d.jpg" % (self.recording_session, self.image_number))
+        while os.path.exists(filename):
+            self.image_number += 1
+            filename = os.path.join(self.recording_path, "%s-still%03d.jpg" % (self.recording_session, self.image_number))
+        self.camera.capture(filename)
+        print("Captured image %s" % filename)
 
     # Main loop
     def run(self, stream=False):
@@ -243,6 +261,7 @@ class Macroscope:
         if stream:
             self.camera.stop_recording()
             vlc.kill()
+        self.camera.close()
 
 # Path helper
     def get_recording_filename(self):
@@ -262,7 +281,11 @@ if __name__ == "__main__":
         filename = value
     
     print('Press "p" to start/stop preview')
+    print('Press Space to start/stop recording')
+    print('Press Enter to take a still image')
+    print('Press "r" to rotate camera')
     print('Press "Esc" to exit')
+    time.sleep(2)
     
     try:
         scope = Macroscope(recording_dir, filename)
