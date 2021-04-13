@@ -119,6 +119,14 @@ class Macroscope:
             self.take_still()
         elif hasattr(key, 'char') and key.char == "r": # rotate
             self.camera.rotation = self.camera.rotation + 90
+        elif hasattr(key, 'char') and key.char == "f": # flip
+            self.camera.hflip = not self.camera.hflip
+        elif key == keyboard.Key.up and self.preview and \
+            self.camera.exposure_compensation < 25:
+            self.camera.exposure_compensation += 1
+        elif key == keyboard.Key.down and self.preview and \
+            self.camera.exposure_compensation > -25:
+            self.camera.exposure_compensation -= 1
 
     def draw_overlay(self):
         a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
