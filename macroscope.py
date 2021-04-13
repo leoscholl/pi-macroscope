@@ -5,6 +5,7 @@ import os
 import copy
 from pynput import mouse, keyboard
 from threading import Timer
+import traceback
 import sys, select
 import subprocess
 
@@ -258,7 +259,7 @@ class Macroscope:
 
 
 if __name__ == "__main__":
-    recording_dir = '/home/pi/recordings'
+    recording_dir = '/media/pi/Leo/video'
     filename = 'macroscope'
 
     # Ask for filename
@@ -286,5 +287,6 @@ if __name__ == "__main__":
         scope.run()
     except Exception as e:
         print(e)
+	traceback.print_tb(e.__traceback__)
         timeout_input("Press any key to exit", timeout=60)
         
