@@ -5,6 +5,7 @@ import os
 import copy
 from pynput import mouse, keyboard
 from threading import Timer
+import traceback
 import sys, select
 import subprocess
 
@@ -120,6 +121,14 @@ class Macroscope:
             self.take_still()
         elif hasattr(key, 'char') and key.char == "r": # rotate
             self.camera.rotation = self.camera.rotation + 90
+        elif hasattr(key, 'char') and key.char == "f": # flip
+            self.camera.hflip = not self.camera.hflip
+        elif key == keyboard.Key.up and self.preview and \
+            self.camera.exposure_compensation < 25:
+            self.camera.exposure_compensation += 1
+        elif key == keyboard.Key.down and self.preview and \
+            self.camera.exposure_compensation > -25:
+            self.camera.exposure_compensation -= 1
 
     def draw_overlay(self):
         a = np.zeros((self.resolution[1], self.resolution[0], 4), dtype=np.uint8)
@@ -251,7 +260,7 @@ class Macroscope:
 
 
 if __name__ == "__main__":
-    recording_dir = '/home/pi/recordings'
+    recording_dir = '/media/pi/Leo/video'
     filename = 'macroscope'
 
     # Ask for filename
@@ -279,5 +288,6 @@ if __name__ == "__main__":
         scope.run()
     except Exception as e:
         print(e)
+	traceback.print_tb(e.__traceback__)
         timeout_input("Press any key to exit", timeout=60)
         
