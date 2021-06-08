@@ -113,6 +113,7 @@ class Macroscope:
                 self.overlay = self.camera.add_overlay(a.tobytes(), layer=3)
                 self.camera.start_preview()
                 self.preview = True
+                self.update = True
         elif key == keyboard.Key.space: # recording
             self.toggle_recording()
         elif key == keyboard.Key.enter:
