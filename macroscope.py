@@ -246,21 +246,24 @@ class Macroscope:
         # Cleanup
         if self.preview:
             self.camera.remove_overlay(self.overlay)
+            camera.stop_preview()
         if self.recording:
-            self.camera.stop_recording(splitter_port=2)
+            camera.stop_recording(splitter_port=2)
         l_mouse.stop()
         if stream:
-            self.camera.stop_recording()
+            camera.stop_recording()
             vlc.kill()
-        self.camera.close()
-
+        camera.close()
+        print("Bye!")
+        time.sleep(1)
+        
 # Path helper
     def get_recording_filename(self):
         return os.path.join(self.recording_path, "%s%03d.h264" % (self.recording_session,self.recording_number))
 
 
 if __name__ == "__main__":
-    recording_dir = '/media/pi/Leo/video'
+    recording_dir = '/home/pi/Videos'
     filename = 'macroscope'
 
     # Ask for filename
@@ -288,6 +291,6 @@ if __name__ == "__main__":
         scope.run()
     except Exception as e:
         print(e)
-	traceback.print_tb(e.__traceback__)
+        traceback.print_tb(e.__traceback__)
         timeout_input("Press any key to exit", timeout=60)
         
