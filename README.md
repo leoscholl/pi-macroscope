@@ -4,9 +4,13 @@ Simple GUI for pi camera that allows you to select an ROI for recording. Uses th
 <img src="https://github.com/leoscholl/pi-macroscope/blob/main/hq-camera-mount.jpg" alt="Image of camera mount" width="250">
 
 ## Install
-Download or clone this repo onto a raspberry pi
+Download or clone this repo onto a raspberry pi running debian buster. The newer camera stack is incompatible with picamera.
 
-As of November 2020 you also need to manually update the picamera python module for compatability with the new HQ camera. See [leoscholl/picamera](https://github.com/leoscholl/picamera)
+As of November 2020 you also need to manually update the picamera python module for compatability with the new HQ camera. Clone [leoscholl/picamera](https://github.com/leoscholl/picamera) and install with `pip3 install picamera`
+
+Install pynput with `pip3 install pynput`
+
+Set the resolution of your display to 720p.
 
 ## Copy the shortcut
 In the file manager, under Edit/Preferences/General, check the box for "Don't ask options on launch executable file". \
